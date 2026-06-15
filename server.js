@@ -15,9 +15,14 @@ const PORT = process.env.PORT || 3000;
 
 const DEXCOM_SHARE_US  = "share2.dexcom.com";
 const DEXCOM_SHARE_OUS = "shareous1.dexcom.com";
-const LOGIN_PATH    = "/ShareWebServices/Services/General/LoginPublisherAccountById";
-const READINGS_PATH = "/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues";
-const APPLICATION_ID = "d89443d2-327c-4a6f-89e5-496bbb0317db";
+const LOGIN_PATH     = "/ShareWebServices/Services/General/LoginPublisherAccountById";
+const READINGS_PATH  = "/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues";
+
+// Try G7 app ID first, fall back to G6 app ID
+const APPLICATION_IDS = [
+  "d89443d2-327c-4a6f-89e5-496bbb0317db", // G7 / current
+  "d8665ade-9673-4e27-9ff6-92db4ce13d13", // G6 fallback
+];
 
 // In-memory session store keyed by a random token we issue to the browser
 const sessions = {};
@@ -50,12 +55,19 @@ function dexcomPost(host, path, body) {
 
 async function dexcomLogin(username, password, outsideUS) {
   const host = outsideUS ? DEXCOM_SHARE_OUS : DEXCOM_SHARE_US;
-  const result = await dexcomPost(host, LOGIN_PATH, {
-    accountName: username, password, applicationId: APPLICATION_ID,
-  });
-  if (result.status !== 200 || typeof result.body !== "string")
-    throw new Error(`Login failed (${result.status}): ${JSON.stringify(result.body)}`);
-  return result.body.replace(/"/g, "");
+  let lastError = null;
+  for (const appId of APPLICATION_IDS) {
+    const result = await dexcomPost(host, LOGIN_PATH, {
+      accountName: username, password, applicationId: appId,
+    });
+    console.log(`Login attempt with appId ${appId}: status=${result.status} body=${JSON.stringify(result.body)}`);
+    if (result.status === 200 && typeof result.body === "string") {
+      const sid = result.body.replace(/"/g, "");
+      if (sid && sid.length > 10) return sid;
+    }
+    lastError = `Login failed (${result.status}): ${JSON.stringify(result.body)}`;
+  }
+  throw new Error(lastError);
 }
 
 async function dexcomReadings(shareSessionId, minutes, maxCount, outsideUS) {
@@ -175,6 +187,20 @@ const server = http.createServer(async (req, res) => {
         result = await dexcomReadings(session.shareSessionId, minutes, maxCount, session.outsideUS);
       }
       json(res, result.status, result.body);
+    } catch (e) {
+      json(res, 500, { error: e.message });
+    }
+    return;
+  }
+
+  // GET /debug — show raw Dexcom response for troubleshooting
+  if (req.method === "GET" && parsed.pathname === "/debug") {
+    const token = req.headers["x-session-token"] || parsed.query.token;
+    const session = sessions[token];
+    if (!session) return json(res, 401, { error: "Not logged in" });
+    try {
+      const result = await dexcomReadings(session.shareSessionId, 180, 36, session.outsideUS);
+      json(res, 200, { status: result.status, count: Array.isArray(result.body) ? result.body.length : "not an array", raw: result.body });
     } catch (e) {
       json(res, 500, { error: e.message });
     }
