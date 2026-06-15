@@ -307,14 +307,14 @@ function renderReadings(raw) {
   const now = Date.now();
   const sorted = [...raw].reverse(); // oldest first
   const points = sorted.map(d => {
-    // G7 may use ST (system time) or DT (display time) instead of WT
-    // Format can be "/Date(1234567890000)/" or an ISO string
     const raw_t = d.WT || d.ST || d.DT || null;
     let t;
     if (!raw_t) {
-      t = Date.now(); // fallback
-    } else if (typeof raw_t === "string" && raw_t.includes("/Date(")) {
-      t = parseInt(raw_t.replace("/Date(", "").replace(")/", "").split("+")[0].split("-")[0]);
+      t = Date.now();
+    } else if (typeof raw_t === "string") {
+      // Handles both "Date(1234567890000)" and "/Date(1234567890000)/"
+      const match = raw_t.match(/Date\((\d+)/);
+      t = match ? parseInt(match[1]) : new Date(raw_t).getTime();
     } else {
       t = new Date(raw_t).getTime();
     }
