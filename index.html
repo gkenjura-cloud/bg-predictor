@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="BG Predictor" />
+<title>BG Predictor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: rgba(255,255,255,0.08);
+    --text: #f0f2ff;
+    --muted: #8890b0;
+    --accent: #5b8dee;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --low: #60a5fa;
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    padding: env(safe-area-inset-top, 1rem) 1rem env(safe-area-inset-bottom, 1rem);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .app { max-width: 480px; margin: 0 auto; padding-top: 1rem; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem; }
+  .logo {
+    width: 44px; height: 44px; background: var(--accent);
+    border-radius: 12px; display: flex; align-items: center;
+    justify-content: center; font-size: 22px; flex-shrink: 0;
+  }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.03em; }
+  .subtitle { font-size: 13px; color: var(--muted); }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .card-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 1rem;
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  label { font-size: 13px; color: var(--muted); }
+  input[type="text"], input[type="password"] {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-size: 16px; padding: 12px 14px; outline: none;
+    transition: border-color 0.15s; width: 100%;
+    -webkit-appearance: none;
+  }
+  input:focus { border-color: var(--accent); }
+  .checkbox-row {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; color: var(--muted); margin-bottom: 14px;
+  }
+  input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+  button {
+    background: var(--accent); border: none; border-radius: var(--radius-sm);
+    color: #fff; cursor: pointer; font-size: 16px; font-weight: 600;
+    padding: 13px 20px; transition: opacity 0.15s; width: 100%;
+    -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  }
+  button:active { opacity: 0.75; }
+  button.secondary {
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); width: auto; font-weight: 500;
+    font-size: 14px; padding: 8px 14px;
+  }
+  button:disabled { opacity: 0.4; }
+  .status-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .dot.connected { background: var(--green); }
+  .dot.error { background: var(--red); }
+  .big-number-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 1rem; }
+  .big-number {
+    background: var(--surface2); border-radius: var(--radius-sm);
+    padding: 14px 8px; text-align: center;
+  }
+  .big-number .val { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+  .big-number .lbl { font-size: 11px; color: var(--muted); margin-top: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .trend-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 14px; font-weight: 600; padding: 6px 14px;
+    border-radius: 99px; margin-bottom: 1rem;
+  }
+  .rising { background: rgba(248,113,113,0.15); color: var(--red); }
+  .falling { background: rgba(96,165,250,0.15); color: var(--low); }
+  .stable { background: rgba(52,211,153,0.15); color: var(--green); }
+  .alert {
+    border-radius: var(--radius-sm); padding: 11px 14px;
+    font-size: 14px; margin-bottom: 1rem;
+  }
+  .alert-low { background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.3); color: var(--low); }
+  .alert-high { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); color: var(--red); }
+  .alert-ok { background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.3); color: var(--green); }
+  .chart-wrap { position: relative; width: 100%; height: 200px; margin-top: 0.75rem; }
+  .refresh-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1rem; gap: 8px;
+  }
+  .last-updated { font-size: 12px; color: var(--muted); }
+  #main-content { display: none; }
+  .spinner {
+    display: inline-block; width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.25); border-top-color: #fff;
+    border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .add-home-banner {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 10px 14px;
+    font-size: 13px; color: var(--muted); margin-bottom: 1rem;
+    display: none;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo" aria-hidden="true">🩸</div>
+    <div>
+      <h1>BG Predictor</h1>
+      <div class="subtitle">Live Dexcom readings</div>
+    </div>
+  </header>
+
+  <div class="add-home-banner" id="add-home-banner">
+    📱 Tip: tap <strong>Share → Add to Home Screen</strong> to use this like an app
+  </div>
+
+  <div class="card" id="login-card">
+    <div class="card-label">Connect to Dexcom Share</div>
+    <div class="field">
+      <label for="username">Dexcom username or email</label>
+      <input type="text" id="username" placeholder="your@email.com" autocomplete="username" autocapitalize="none" autocorrect="off" />
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" autocomplete="current-password" />
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="outside-us" />
+      <label for="outside-us">Outside the US</label>
+    </div>
+    <button onclick="doLogin()" id="login-btn">Connect</button>
+    <div class="status-row">
+      <div class="dot" id="status-dot"></div>
+      <span id="status-msg" style="color:var(--muted)">Not connected</span>
+    </div>
+  </div>
+
+  <div id="main-content">
+    <div class="card">
+      <div class="refresh-row">
+        <div class="card-label" style="margin:0">Live readings</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="last-updated" id="last-updated">—</span>
+          <button class="secondary" onclick="loadReadings()" id="refresh-btn">↻</button>
+          <button class="secondary" onclick="doLogout()">Log out</button>
+        </div>
+      </div>
+      <div class="big-number-row">
+        <div class="big-number">
+          <div class="val" id="current-bg">—</div>
+          <div class="lbl">Now</div>
+        </div>
+        <div class="big-number">
+          <div class="val" id="pred15">—</div>
+          <div class="lbl">+15 min</div>
+        </div>
+        <div class="big-number">
+          <div class="val" id="pred30">—</div>
+          <div class="lbl">+30 min</div>
+        </div>
+      </div>
+      <div id="trend-pill-wrap"></div>
+      <div id="alert-box"></div>
+      <div class="chart-wrap">
+        <canvas id="bgChart" role="img" aria-label="Blood sugar trend and prediction chart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// The app talks to itself — no hardcoded URL needed on Railway
+const API = "";
+let sessionToken = sessionStorage.getItem("bg_token") || null;
+let chartInstance = null;
+let autoRefreshTimer = null;
+
+// Show "Add to Home Screen" banner on iOS Safari
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isStandalone = window.navigator.standalone;
+if (isIOS && !isStandalone) document.getElementById("add-home-banner").style.display = "block";
+
+// Auto-login if we have a stored token
+if (sessionToken) {
+  document.getElementById("main-content").style.display = "block";
+  loadReadings();
+  autoRefreshTimer = setInterval(loadReadings, 5 * 60 * 1000);
+}
+
+function setStatus(type, msg) {
+  const dot = document.getElementById("status-dot");
+  const el  = document.getElementById("status-msg");
+  dot.className = "dot" + (type === "ok" ? " connected" : type === "error" ? " error" : "");
+  el.textContent = msg;
+  el.style.color = type === "error" ? "var(--red)" : type === "ok" ? "var(--green)" : "var(--muted)";
+}
+
+async function doLogin() {
+  const username  = document.getElementById("username").value.trim();
+  const password  = document.getElementById("password").value;
+  const outsideUS = document.getElementById("outside-us").checked;
+  if (!username || !password) { setStatus("error", "Enter your Dexcom username and password."); return; }
+
+  const btn = document.getElementById("login-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  setStatus("", "Connecting…");
+
+  try {
+    const r = await fetch(`${API}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, outsideUS }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Login failed");
+
+    sessionToken = data.token;
+    sessionStorage.setItem("bg_token", sessionToken);
+    setStatus("ok", "Connected");
+    document.getElementById("main-content").style.display = "block";
+    await loadReadings();
+    autoRefreshTimer = setInterval(loadReadings, 5 * 60 * 1000);
+  } catch (e) {
+    setStatus("error", e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Connect";
+  }
+}
+
+function doLogout() {
+  clearInterval(autoRefreshTimer);
+  sessionToken = null;
+  sessionStorage.removeItem("bg_token");
+  document.getElementById("main-content").style.display = "none";
+  document.getElementById("username").value = "";
+  document.getElementById("password").value = "";
+  setStatus("", "Not connected");
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+}
+
+async function loadReadings() {
+  if (!sessionToken) return;
+  const btn = document.getElementById("refresh-btn");
+  btn.disabled = true;
+
+  try {
+    const r = await fetch(`${API}/readings?minutes=60&maxCount=12`, {
+      headers: { "X-Session-Token": sessionToken },
+    });
+    if (r.status === 401) { doLogout(); return; }
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Failed");
+    if (!Array.isArray(data) || data.length < 2) throw new Error("Not enough readings yet");
+    renderReadings(data);
+    document.getElementById("last-updated").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    document.getElementById("last-updated").textContent = "Error: " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function linReg(pts) {
+  const n = pts.length;
+  const sx = pts.reduce((a, p) => a + p.x, 0), sy = pts.reduce((a, p) => a + p.y, 0);
+  const sxy = pts.reduce((a, p) => a + p.x * p.y, 0), sx2 = pts.reduce((a, p) => a + p.x * p.x, 0);
+  const slope = (n * sxy - sx * sy) / (n * sx2 - sx * sx);
+  return { slope, intercept: (sy - slope * sx) / n };
+}
+
+function bgColor(v) { return v < 70 ? "var(--low)" : v > 180 ? "var(--red)" : "var(--green)"; }
+
+function renderReadings(raw) {
+  const now = Date.now();
+  const sorted = [...raw].reverse(); // oldest first
+  const points = sorted.map(d => {
+    const t = new Date(d.WT.replace("/Date(", "").replace(")/", "")).getTime();
+    return { bg: d.Value, minsAgo: (now - t) / 60000 };
+  });
+
+  const reg = linReg(points.map(p => ({ x: -p.minsAgo, y: p.bg })));
+  const cur  = Math.round(reg.slope * 0  + reg.intercept);
+  const p15  = Math.round(reg.slope * 15 + reg.intercept);
+  const p30  = Math.round(reg.slope * 30 + reg.intercept);
+
+  const setBig = (id, val) => {
+    const el = document.getElementById(id);
+    el.textContent = val;
+    el.style.color = bgColor(val);
+  };
+  setBig("current-bg", cur);
+  setBig("pred15", p15);
+  setBig("pred30", p30);
+
+  // Trend pill
+  let cls = "stable", arrow = "→", label = "Stable";
+  if      (reg.slope >  1)   { cls = "rising";  arrow = "↑↑"; label = "Rising fast"; }
+  else if (reg.slope >  0.3) { cls = "rising";  arrow = "↑";  label = "Rising"; }
+  else if (reg.slope < -1)   { cls = "falling"; arrow = "↓↓"; label = "Falling fast"; }
+  else if (reg.slope < -0.3) { cls = "falling"; arrow = "↓";  label = "Falling"; }
+  const rate = (reg.slope >= 0 ? "+" : "") + reg.slope.toFixed(1);
+  document.getElementById("trend-pill-wrap").innerHTML =
+    `<div class="trend-pill ${cls}">${arrow} ${label} <span style="opacity:.6;font-weight:400">${rate}/min</span></div>`;
+
+  // Alert
+  const aEl = document.getElementById("alert-box");
+  if      (p15 < 70  || p30 < 70)  aEl.innerHTML = `<div class="alert alert-low">⚠️ Heading low — may drop under 70. Consider acting now.</div>`;
+  else if (p15 > 180 || p30 > 180) aEl.innerHTML = `<div class="alert alert-high">⚠️ Heading high — may exceed 180. Monitor closely.</div>`;
+  else                               aEl.innerHTML = `<div class="alert alert-ok">✓ Predicted to stay in range for 30 minutes.</div>`;
+
+  // Chart
+  const labels   = [...points.map(p => `-${Math.round(p.minsAgo)}m`), "Now", "+15m", "+30m"];
+  const xVals    = [...points.map(p => -p.minsAgo), 0, 15, 30];
+  const histData = [...points.map(p => p.bg), null, null, null];
+  const predData = xVals.map(x => reg.slope * x + reg.intercept);
+
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  const ctx = document.getElementById("bgChart").getContext("2d");
+  chartInstance = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Readings",
+          data: histData,
+          borderColor: "#5b8dee", backgroundColor: "#5b8dee",
+          pointRadius: 4, borderWidth: 2, spanGaps: false, order: 1,
+        },
+        {
+          label: "Prediction",
+          data: predData,
+          borderColor: "#f87171", backgroundColor: "transparent",
+          borderWidth: 2, borderDash: [5, 4],
+          pointRadius: (c) => c.dataIndex >= points.length ? 6 : 0,
+          pointStyle: "triangle", order: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: (c) => c.raw !== null ? `${c.dataset.label}: ${Math.round(c.raw)} mg/dL` : "" },
+        },
+        annotation: {
+          annotations: {
+            low:  { type: "line", yMin: 70,  yMax: 70,  borderColor: "rgba(96,165,250,0.4)", borderWidth: 1, borderDash: [4,4] },
+            high: { type: "line", yMin: 180, yMax: 180, borderColor: "rgba(248,113,113,0.4)", borderWidth: 1, borderDash: [4,4] },
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: "#8890b0", font: { size: 10 }, maxRotation: 0 }, grid: { color: "rgba(255,255,255,0.05)" } },
+        y: {
+          min: 50, max: 300,
+          ticks: { color: "#8890b0", font: { size: 10 } },
+          grid: { color: "rgba(255,255,255,0.05)" },
+        },
+      },
+    },
+  });
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && document.getElementById("main-content").style.display === "none") doLogin();
+});
+</script>
+</body>
+</html>
