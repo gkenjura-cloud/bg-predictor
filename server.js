@@ -194,6 +194,9 @@ const server = http.createServer(async (req, res) => {
         session.expiry = Date.now() + 8 * 60 * 60 * 1000;
         result = await dexcomReadings(session.shareSessionId, minutes, maxCount, session.outsideUS);
       }
+      if (Array.isArray(result.body) && result.body.length > 0) {
+        console.log("Sample reading fields:", JSON.stringify(result.body[0]));
+      }
       json(res, result.status, result.body);
     } catch (e) {
       json(res, 500, { error: e.message });

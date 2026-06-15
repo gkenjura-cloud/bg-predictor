@@ -307,9 +307,19 @@ function renderReadings(raw) {
   const now = Date.now();
   const sorted = [...raw].reverse(); // oldest first
   const points = sorted.map(d => {
-    const t = new Date(d.WT.replace("/Date(", "").replace(")/", "")).getTime();
+    // G7 may use ST (system time) or DT (display time) instead of WT
+    // Format can be "/Date(1234567890000)/" or an ISO string
+    const raw_t = d.WT || d.ST || d.DT || null;
+    let t;
+    if (!raw_t) {
+      t = Date.now(); // fallback
+    } else if (typeof raw_t === "string" && raw_t.includes("/Date(")) {
+      t = parseInt(raw_t.replace("/Date(", "").replace(")/", "").split("+")[0].split("-")[0]);
+    } else {
+      t = new Date(raw_t).getTime();
+    }
     return { bg: d.Value, minsAgo: (now - t) / 60000 };
-  });
+  }).filter(p => !isNaN(p.bg) && !isNaN(p.minsAgo));
 
   const reg = linReg(points.map(p => ({ x: -p.minsAgo, y: p.bg })));
   const cur  = Math.round(reg.slope * 0  + reg.intercept);
