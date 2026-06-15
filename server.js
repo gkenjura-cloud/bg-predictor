@@ -15,10 +15,10 @@ const PORT = process.env.PORT || 3000;
 
 const DEXCOM_SHARE_US  = "share2.dexcom.com";
 const DEXCOM_SHARE_OUS = "shareous1.dexcom.com";
-const LOGIN_PATH     = "/ShareWebServices/Services/General/LoginPublisherAccountById";
-const READINGS_PATH  = "/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues";
+const LOGIN_PATH_BY_NAME = "/ShareWebServices/Services/General/LoginPublisherAccountByName";
+const LOGIN_PATH_BY_ID   = "/ShareWebServices/Services/General/LoginPublisherAccountById";
+const READINGS_PATH      = "/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues";
 
-// Try G7 app ID first, fall back to G6 app ID
 const APPLICATION_IDS = [
   "d89443d2-327c-4a6f-89e5-496bbb0317db", // G7 / current
   "d8665ade-9673-4e27-9ff6-92db4ce13d13", // G6 fallback
@@ -55,17 +55,25 @@ function dexcomPost(host, path, body) {
 
 async function dexcomLogin(username, password, outsideUS) {
   const host = outsideUS ? DEXCOM_SHARE_OUS : DEXCOM_SHARE_US;
+  const NULL_SID = "00000000-0000-0000-0000-000000000000";
+  const attempts = [
+    { path: LOGIN_PATH_BY_NAME, appId: APPLICATION_IDS[0], body: (u, p, a) => ({ accountName: u, password: p, applicationId: a }) },
+    { path: LOGIN_PATH_BY_ID,   appId: APPLICATION_IDS[0], body: (u, p, a) => ({ accountId:   u, password: p, applicationId: a }) },
+    { path: LOGIN_PATH_BY_NAME, appId: APPLICATION_IDS[1], body: (u, p, a) => ({ accountName: u, password: p, applicationId: a }) },
+    { path: LOGIN_PATH_BY_ID,   appId: APPLICATION_IDS[1], body: (u, p, a) => ({ accountId:   u, password: p, applicationId: a }) },
+  ];
   let lastError = null;
-  for (const appId of APPLICATION_IDS) {
-    const result = await dexcomPost(host, LOGIN_PATH, {
-      accountName: username, password, applicationId: appId,
-    });
-    console.log(`Login attempt with appId ${appId}: status=${result.status} body=${JSON.stringify(result.body)}`);
-    if (result.status === 200 && typeof result.body === "string") {
-      const sid = result.body.replace(/"/g, "");
-      if (sid && sid.length > 10) return sid;
+  for (const attempt of attempts) {
+    const result = await dexcomPost(host, attempt.path, attempt.body(username, password, attempt.appId));
+    const sid = typeof result.body === "string" ? result.body.replace(/"/g, "") : null;
+    console.log(`Login attempt ${attempt.path} / ${attempt.appId}: status=${result.status} sid=${sid}`);
+    if (result.status === 200 && sid && sid.length > 10 && sid !== NULL_SID) {
+      console.log("Login succeeded with path:", attempt.path, "appId:", attempt.appId);
+      return sid;
     }
-    lastError = `Login failed (${result.status}): ${JSON.stringify(result.body)}`;
+    lastError = sid === NULL_SID
+      ? `Null session returned — credentials may be wrong or account not linked to a sensor`
+      : `Login failed (${result.status}): ${JSON.stringify(result.body)}`;
   }
   throw new Error(lastError);
 }
