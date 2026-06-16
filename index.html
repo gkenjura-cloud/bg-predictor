@@ -199,7 +199,6 @@
 </div>
 
 <script>
-// The app talks to itself — no hardcoded URL needed on Railway
 const API = "";
 let sessionToken = sessionStorage.getItem("bg_token") || null;
 let chartInstance = null;
@@ -210,11 +209,21 @@ const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isStandalone = window.navigator.standalone;
 if (isIOS && !isStandalone) document.getElementById("add-home-banner").style.display = "block";
 
-// Auto-login if we have a stored token
+// Pre-fill saved credentials
+const savedCreds = JSON.parse(localStorage.getItem("bg_creds") || "null");
+if (savedCreds) {
+  document.getElementById("username").value = savedCreds.username || "";
+  document.getElementById("password").value = savedCreds.password || "";
+  document.getElementById("outside-us").checked = savedCreds.outsideUS || false;
+}
+
+// Auto-login: use existing session or re-login with saved credentials
 if (sessionToken) {
   document.getElementById("main-content").style.display = "block";
   loadReadings();
   autoRefreshTimer = setInterval(loadReadings, 5 * 60 * 1000);
+} else if (savedCreds) {
+  doLogin();
 }
 
 function setStatus(type, msg) {
@@ -247,6 +256,7 @@ async function doLogin() {
 
     sessionToken = data.token;
     sessionStorage.setItem("bg_token", sessionToken);
+    localStorage.setItem("bg_creds", JSON.stringify({ username, password, outsideUS }));
     setStatus("ok", "Connected");
     document.getElementById("main-content").style.display = "block";
     await loadReadings();
@@ -263,6 +273,7 @@ function doLogout() {
   clearInterval(autoRefreshTimer);
   sessionToken = null;
   sessionStorage.removeItem("bg_token");
+  localStorage.removeItem("bg_creds");
   document.getElementById("main-content").style.display = "none";
   document.getElementById("username").value = "";
   document.getElementById("password").value = "";
